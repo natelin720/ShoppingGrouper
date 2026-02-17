@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VISA Optimizer Pro</title>
+    <title>VISA Optimizer Max</title>
     <style>
         :root { --visa-blue: #0033a0; --success: #28a745; --danger: #dc3545; --warning: #ffc107; }
         body { font-family: -apple-system, system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; color: #333; }
@@ -72,7 +72,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <h3 id="ui-listTitle" style="margin:0; font-size: 0.95em;">買い物リスト</h3>
             <div style="text-align: right; font-size: 0.85em;">
-                <span id="ui-totalLabel">合計</span>: ¥<span id="totalDisplay">0</span>
+                <span id="ui-totalLabel">合計 (割引後)</span>: ¥<span id="totalDisplay">0</span>
                 <div style="color: #888;">≈ NT$ <span id="totalTWD">0</span></div>
             </div>
         </div>
@@ -85,12 +85,12 @@
 
     <script>
         const i18n = {
-            zh: { title: '💳 VISA 湊千精算師', placeholderName: '品項名稱', placeholderPrice: '單價', addBtn: '＋ 加入清單', listTitle: '目前清單', totalLabel: '總計 (折後)', calcBtn: '⚙️ 執行精準分組', groupName: '組合 {n}', qualified: '✅ 達標', unqualified: '⚠️ 未達標', suggest: '💡 再湊 ¥{m} 即可多抽一次！', noDiscount: '無折扣', custom: '自定義 %' },
-            ja: { title: '💳 VISA 1000円精算機', placeholderName: '商品名', placeholderPrice: '単価', addBtn: '＋ 追加', listTitle: '買い物リスト', totalLabel: '合計 (割引後)', calcBtn: '⚙️ 精密グループ分け', groupName: 'グループ {n}', qualified: '✅ 達成', unqualified: '⚠️ 未達成', groupName: 'グループ {n}', suggest: '💡 あと ¥{m} で抽選権確定！', noDiscount: '割引なし', custom: 'カスタム' }
+            zh: { title: '💳 VISA 湊千精算師', placeholderName: '品項名稱', placeholderPrice: '單價', addBtn: '＋ 加入清單', listTitle: '目前清單', totalLabel: '總計 (折後)', calcBtn: '⚙️ 執行精準分組', groupName: '組合 {n}', qualified: '✅ 達標', unqualified: '⚠️ 未達標', suggest: '💡 再湊 ¥{m} 即可多抽一次！' },
+            ja: { title: '💳 VISA 1000円精算機', placeholderName: '商品名', placeholderPrice: '単価', addBtn: '＋ 追加', listTitle: '買い物リスト', totalLabel: '合計 (割引後)', calcBtn: '⚙️ 精密グループ分け', groupName: 'グループ {n}', qualified: '✅ 達成', unqualified: '⚠️ 未達成', suggest: '💡 あと ¥{m} で抽選権確定！' }
         };
 
         let items = [];
-        let currentLang = 'ja'; // 預設日文
+        let currentLang = 'ja';
         const TARGET = 1000;
         const JPY_TWD_RATE = 0.215;
 
@@ -130,13 +130,10 @@
             }
 
             if (!price) return;
+            const singleFinalPrice = Math.round(price * discount);
 
-            // 計算折後總價
-            const finalPrice = Math.round(price * discount * qty);
-
-            items.push({ id: Date.now(), name, price, qty, discount, finalPrice });
+            items.push({ id: Date.now(), name, price, qty, discount, singleFinalPrice });
             
-            // 重設輸入
             document.getElementById('itemName').value = '';
             document.getElementById('itemPrice').value = '';
             document.getElementById('itemQty').value = '1';
@@ -156,7 +153,6 @@
                 document.getElementById('itemName').value = i.name;
                 document.getElementById('itemPrice').value = i.price;
                 document.getElementById('itemQty').value = i.qty;
-                // 折扣回填邏輯略簡化
                 deleteItem(id);
             }
         }
@@ -171,15 +167,15 @@
 
         function renderList() {
             const listEl = document.getElementById('itemList');
-            let total = items.reduce((s, i) => s + i.finalPrice, 0);
+            let total = items.reduce((s, i) => s + (i.singleFinalPrice * i.qty), 0);
             listEl.innerHTML = items.map(i => `
                 <li>
                     <div class="item-main" onclick="editItem(${i.id})">
                         <strong>${i.name} x ${i.qty}</strong>
-                        <span>¥${i.finalPrice.toLocaleString()}</span>
+                        <span>¥${(i.singleFinalPrice * i.qty).toLocaleString()}</span>
                     </div>
                     <div class="item-detail">
-                        ¥${i.price} ${i.discount < 1 ? `(${Math.round(i.discount*100)}%)` : ''} 
+                        単価 ¥${i.singleFinalPrice} ${i.discount < 1 ? `(${Math.round(i.discount*100)}%)` : ''} 
                         <button class="btn-del" style="float:right" onclick="deleteItem(${i.id})">🗑️</button>
                     </div>
                 </li>
@@ -188,10 +184,19 @@
             document.getElementById('totalTWD').innerText = Math.round(total * JPY_TWD_RATE).toLocaleString();
         }
 
-        // 精準回溯演算法
+        // --- 核心升級：拆解複數品項進行精準分組 ---
         function calculateGroups() {
             if (items.length === 0) return;
-            let remaining = [...items].sort((a, b) => b.finalPrice - a.finalPrice);
+            
+            // 將複數品項「原子化」：1 個 x3 的品項拆成 3 個單獨品項
+            let flatPool = [];
+            items.forEach(i => {
+                for(let n=0; n<i.qty; n++) {
+                    flatPool.push({ id: `${i.id}_${n}`, name: i.name, finalPrice: i.singleFinalPrice });
+                }
+            });
+            
+            let remaining = flatPool.sort((a, b) => b.finalPrice - a.finalPrice);
             let groups = [];
         
             while (true) {
@@ -231,16 +236,24 @@
                 const ok = g.sum >= TARGET;
                 const div = document.createElement('div');
                 div.className = `result-group ${ok ? 'status-ok' : 'status-fail'}`;
-                let html = `
+                
+                // 顯示時將相同的原子化品項重新合併，讓畫面乾淨
+                const summary = g.items.reduce((acc, curr) => {
+                    acc[curr.name] = (acc[curr.name] || 0) + 1;
+                    return acc;
+                }, {});
+                const summaryText = Object.entries(summary).map(([name, count]) => `${name} x${count}`).join(' + ');
+
+                div.innerHTML = `
                     <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? d.qualified : d.unqualified}</span>
                     <strong style="display:block; font-size: 1.1em;">${d.groupName.replace('{n}', idx + 1)}: ¥${g.sum.toLocaleString()}</strong>
                     <div style="font-size: 0.8em; color: #888;">≈ NT$ ${Math.round(g.sum * JPY_TWD_RATE)}</div>
                     <div style="margin-top:5px; font-size: 0.8em; color: #666; border-top: 1px dashed #eee; padding-top:5px;">
-                        ${g.items.map(i => `${i.name} (¥${i.finalPrice})`).join(' + ')}
+                        ${summaryText}
                     </div>
                 `;
                 if (!ok) html += `<span class="suggestion">${d.suggest.replace('{m}', TARGET - g.sum)}</span>`;
-                div.innerHTML = html;
+                div.innerHTML += !ok ? `<span class="suggestion">${d.suggest.replace('{m}', TARGET - g.sum)}</span>` : '';
                 resDiv.appendChild(div);
             });
             resDiv.scrollIntoView({ behavior: 'smooth' });
