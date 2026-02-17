@@ -94,6 +94,25 @@
         const TARGET = 1000;
         const JPY_TWD_RATE = 0.215;
 
+        // 初始化：從本地儲存讀取資料
+        window.onload = function() {
+            const savedItems = localStorage.getItem('visa_optimizer_items');
+            if (savedItems) {
+                items = JSON.parse(savedItems);
+            }
+            const savedLang = localStorage.getItem('visa_optimizer_lang');
+            if (savedLang) {
+                setLang(savedLang);
+            } else {
+                setLang('ja');
+            }
+        };
+
+        function saveData() {
+            localStorage.setItem('visa_optimizer_items', JSON.stringify(items));
+            localStorage.setItem('visa_optimizer_lang', currentLang);
+        }
+
         function toggleCustomDiscount() {
             const select = document.getElementById('itemDiscount');
             const customInput = document.getElementById('customDiscount');
@@ -112,6 +131,7 @@
             document.getElementById('ui-listTitle').innerText = d.listTitle;
             document.getElementById('ui-totalLabel').innerText = d.totalLabel;
             document.getElementById('ui-calcBtn').innerText = d.calcBtn;
+            saveData();
             renderList();
         }
 
@@ -139,11 +159,13 @@
             document.getElementById('itemQty').value = '1';
             document.getElementById('itemDiscount').value = '1';
             toggleCustomDiscount();
+            saveData();
             renderList();
         }
 
         function deleteItem(id) {
             items = items.filter(i => i.id !== id);
+            saveData();
             renderList();
         }
 
@@ -158,8 +180,10 @@
         }
 
         function clearAll() {
-            if(confirm(currentLang === 'zh' ? "確定要清除全部？" : "全て削除しますか？")) {
+            const msg = currentLang === 'zh' ? "確定要清除全部並刪除儲存紀錄嗎？" : "全てのデータを削除し、保存記録をクリアしますか？";
+            if(confirm(msg)) {
                 items = [];
+                localStorage.removeItem('visa_optimizer_items');
                 renderList();
                 document.getElementById('results').innerHTML = '';
             }
@@ -184,11 +208,9 @@
             document.getElementById('totalTWD').innerText = Math.round(total * JPY_TWD_RATE).toLocaleString();
         }
 
-        // --- 核心升級：拆解複數品項進行精準分組 ---
         function calculateGroups() {
             if (items.length === 0) return;
             
-            // 將複數品項「原子化」：1 個 x3 的品項拆成 3 個單獨品項
             let flatPool = [];
             items.forEach(i => {
                 for(let n=0; n<i.qty; n++) {
@@ -196,7 +218,7 @@
                 }
             });
             
-            let remaining = flatPool.sort((a, b) => b.finalPrice - a.finalPrice);
+            let remaining = flatPool.sort((a, b) => b.finalPrice - a.price);
             let groups = [];
         
             while (true) {
@@ -237,7 +259,6 @@
                 const div = document.createElement('div');
                 div.className = `result-group ${ok ? 'status-ok' : 'status-fail'}`;
                 
-                // 顯示時將相同的原子化品項重新合併，讓畫面乾淨
                 const summary = g.items.reduce((acc, curr) => {
                     acc[curr.name] = (acc[curr.name] || 0) + 1;
                     return acc;
@@ -252,7 +273,6 @@
                         ${summaryText}
                     </div>
                 `;
-                if (!ok) html += `<span class="suggestion">${d.suggest.replace('{m}', TARGET - g.sum)}</span>`;
                 div.innerHTML += !ok ? `<span class="suggestion">${d.suggest.replace('{m}', TARGET - g.sum)}</span>` : '';
                 resDiv.appendChild(div);
             });
