@@ -27,7 +27,8 @@
         ul { list-style: none; padding: 0; margin: 0; }
         li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f9f9f9; font-size: 14px; }
         .item-info { flex: 1; display: flex; justify-content: space-between; margin-right: 15px; cursor: pointer; }
-        .btn-delete { color: var(--danger); background: none; padding: 5px; font-size: 16px; }
+        .btn-delete { color: #aaa; background: none; padding: 5px; font-size: 18px; }
+        .btn-delete:hover { color: var(--danger); }
 
         .result-group { border-left: 6px solid var(--visa-blue); padding: 12px; margin-top: 12px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .status-ok { border-color: var(--success); }
@@ -117,7 +118,7 @@
         };
 
         let currentLang = 'zh';
-        let items = []; // 儲存格式: { id, name, price }
+        let items = [];
         const TARGET = 1000;
         const RATE = 0.215;
 
@@ -137,32 +138,28 @@
             updateUI();
         }
 
-        // --- 清單管理 ---
         function addItem() {
-            const nameInput = document.getElementById('itemName');
-            const priceInput = document.getElementById('itemPrice');
-            const name = nameInput.value || i18n[currentLang].unnamed;
-            const price = parseFloat(priceInput.value);
-            
+            const nameEl = document.getElementById('itemName');
+            const priceEl = document.getElementById('itemPrice');
+            const price = parseFloat(priceEl.value);
             if (!price) return;
-
-            items.push({ id: Date.now() + Math.random(), name, price });
-            nameInput.value = "";
-            priceInput.value = "";
+            items.push({ id: Date.now() + Math.random(), name: nameEl.value || i18n[currentLang].unnamed, price });
+            nameEl.value = "";
+            priceEl.value = "";
             updateUI();
         }
 
         function deleteItem(id) {
-            items = items.filter(item => item.id !== id);
+            items = items.filter(i => i.id !== id);
             updateUI();
         }
 
         function editItem(id) {
-            const item = items.find(i => i.id === id);
-            if (item) {
-                document.getElementById('itemName').value = item.name;
-                document.getElementById('itemPrice').value = item.price;
-                deleteItem(id); // 先移除，修改後再按「加入清單」
+            const i = items.find(x => x.id === id);
+            if (i) {
+                document.getElementById('itemName').value = i.name;
+                document.getElementById('itemPrice').value = i.price;
+                deleteItem(id);
             }
         }
 
@@ -171,7 +168,6 @@
             let total = items.reduce((s, i) => s + i.price, 0);
             document.getElementById('totalDisplay').innerText = total.toLocaleString();
             document.getElementById('totalTWD').innerText = Math.round(total * RATE).toLocaleString();
-            
             listEl.innerHTML = items.map(i => `
                 <li>
                     <div class="item-info" onclick="editItem(${i.id})">
@@ -181,84 +177,47 @@
                     <button class="btn-delete" onclick="deleteItem(${i.id})">🗑️</button>
                 </li>
             `).join('');
-            
-            // 每次更新清單時，清空舊的計算結果
             document.getElementById('results').innerHTML = "";
         }
 
-        // --- 精準分組演算法 (核心修正) ---
+        // --- 修正後的精準分組演算法 ---
         function calculateGroups() {
             if (items.length === 0) return;
-            
-            let pool = [...items];
+            let pool = [...items].sort((a, b) => b.price - a.price); // 由大到小排序
             let groups = [];
 
             while (pool.length > 0) {
-                let bestCombination = getBestCombination(pool, TARGET);
-                if (bestCombination.items.length === 0) break;
-                
-                groups.push(bestCombination);
-                
-                const usedIds = bestCombination.items.map(i => i.id);
-                pool = pool.filter(i => !usedIds.includes(i.id));
+                let currentGroup = [];
+                let currentSum = 0;
+
+                // 優先放入當前最大的品項
+                currentSum += pool[0].price;
+                currentGroup.push(pool[0]);
+                pool.splice(0, 1);
+
+                // 尋找剩餘池子中，最合適塞入的品項（湊滿 1000）
+                for (let i = 0; i < pool.length; i++) {
+                    if (currentSum < TARGET) {
+                        currentSum += pool[i].price;
+                        currentGroup.push(pool[i]);
+                        pool.splice(i, 1);
+                        i--; // 補償索引位移
+                    }
+                }
+                groups.push({ items: currentGroup, sum: currentSum });
             }
             renderResults(groups);
         }
 
-        function getBestCombination(remaining, target) {
-            // 如果剩下總額不足 1000，直接全部歸一組
-            const currentTotal = remaining.reduce((s, i) => s + i.price, 0);
-            if (currentTotal < target) {
-                return { items: [...remaining], sum: currentTotal };
-            }
-
-            let bestItems = [];
-            let minExcess = Infinity;
-
-            // 深度優先搜尋 (DFS) 尋找最接近且大於 1000 的組合
-            function dfs(index, currentItems, currentSum) {
-                if (currentSum >= target) {
-                    if (currentSum - target < minExcess) {
-                        minExcess = currentSum - target;
-                        bestItems = [...currentItems];
-                    }
-                    return;
-                }
-                if (index >= remaining.length || (currentSum - target) > minExcess) return;
-
-                // 選
-                currentItems.push(remaining[index]);
-                dfs(index + 1, currentItems, currentSum + remaining[index]);
-                currentItems.pop();
-                
-                // 不選
-                dfs(index + 1, currentItems, currentSum);
-            }
-
-            dfs(0, [], 0);
-            
-            // 安全機制：如果 DFS 沒找到（理論上不會），就隨便拿一個
-            if (bestItems.length === 0 && remaining.length > 0) {
-                bestItems = [remaining[0]];
-            }
-
-            return { items: bestItems, sum: bestItems.reduce((s, i) => s + i.price, 0) };
-        }
-
         function renderResults(groups) {
             const resDiv = document.getElementById('results');
-            resDiv.innerHTML = `<h3 style="margin-left:5px; font-size: 1.1em;">📊 分組建議結果</h3>`;
-            
+            resDiv.innerHTML = `<h3 style="margin-left:5px">📊 分組建議結果</h3>`;
             groups.forEach((g, idx) => {
                 const ok = g.sum >= TARGET;
                 const dict = i18n[currentLang];
                 const div = document.createElement('div');
                 div.className = `result-group ${ok ? 'status-ok' : 'status-fail'}`;
-                
-                let suggestMsg = "";
-                if (!ok) {
-                    suggestMsg = `<span class="suggestion">${dict.suggest.replace('{m}', TARGET - g.sum)}</span>`;
-                }
+                let suggestMsg = !ok ? `<span class="suggestion">${dict.suggest.replace('{m}', TARGET - g.sum)}</span>` : "";
 
                 div.innerHTML = `
                     <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? dict.qualified : dict.unqualified}</span>
@@ -273,7 +232,7 @@
             });
         }
 
-        // --- OCR 拍照辨識 ---
+        // OCR 略，保持原樣...
         document.getElementById('cameraInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -289,10 +248,8 @@
                         break;
                     }
                 }
-                document.getElementById('ocrStatus').innerText = "✅ 辨識完成";
-            } catch (err) {
-                document.getElementById('ocrStatus').innerText = "❌ 辨識失敗";
-            }
+                document.getElementById('ocrStatus').innerText = "";
+            } catch (err) { document.getElementById('ocrStatus').innerText = "辨識錯誤"; }
         });
     </script>
 </body>
