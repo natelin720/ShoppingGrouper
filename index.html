@@ -110,32 +110,50 @@
         // --- 核心演算法：修正分組邏輯 ---
         function calculateGroups() {
             if (items.length === 0) return;
-            
-            // 先依價格從大到小排序，利於裝箱
-            let pool = [...items].sort((a, b) => b.price - a.price);
+        
+            let remaining = [...items].sort((a, b) => b.price - a.price);
             let groups = [];
-
-            while (pool.length > 0) {
-                let currentGroup = [];
-                let currentSum = 0;
-
-                // 每個組合至少拿一個當前最大的
-                currentGroup.push(pool[0]);
-                currentSum += pool[0].price;
-                pool.splice(0, 1);
-
-                // 嘗試從剩下的池子裡找出能填進這組、且最接近 1000 的組合
-                // 這裡採用 Greedy 邏輯：只要加了不會大幅超過 1000 太多，或者還沒滿 1000，就繼續加
-                for (let i = 0; i < pool.length; i++) {
-                    if (currentSum < TARGET) {
-                        currentSum += pool[i].price;
-                        currentGroup.push(pool[i]);
-                        pool.splice(i, 1);
-                        i--; // 因為移除了元素，索引要回退
+        
+            while (true) {
+                let bestGroup = null;
+        
+                function backtrack(start, currentGroup, currentSum) {
+                    if (currentSum >= TARGET) {
+                        if (!bestGroup || currentSum < bestGroup.sum) {
+                            bestGroup = {
+                                items: [...currentGroup],
+                                sum: currentSum
+                            };
+                        }
+                        return;
+                    }
+        
+                    for (let i = start; i < remaining.length; i++) {
+                        currentGroup.push(remaining[i]);
+                        backtrack(i + 1, currentGroup, currentSum + remaining[i].price);
+                        currentGroup.pop();
                     }
                 }
-                groups.push({ items: currentGroup, sum: currentSum });
+        
+                backtrack(0, [], 0);
+        
+                if (!bestGroup) break;
+        
+                groups.push(bestGroup);
+        
+                const usedIds = new Set(bestGroup.items.map(i => i.id));
+                remaining = remaining.filter(i => !usedIds.has(i.id));
             }
+        
+            // 如果還有剩餘沒達標的，當成最後一組
+            if (remaining.length > 0) {
+                const sum = remaining.reduce((s, i) => s + i.price, 0);
+                groups.push({
+                    items: remaining,
+                    sum: sum
+                });
+            }
+        
             renderResultUI(groups);
         }
 
