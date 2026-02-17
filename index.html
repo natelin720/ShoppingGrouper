@@ -3,148 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VISA 湊千小幫手</title>
+    <title>VISA Optimizer</title>
     <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
     <style>
-        :root { --visa-blue: #0033a0; --visa-gold: #f7b600; --success: #28a745; --danger: #dc3545; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; color: #333; }
-        h2 { color: var(--visa-blue); text-align: center; margin-bottom: 20px; }
-        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
-        h3 { margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        :root { --visa-blue: #0033a0; --visa-gold: #f7b600; --success: #28a745; --danger: #dc3545; --light-bg: #f8f9fa; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--light-bg); margin: 0; padding: 15px; color: #333; }
         
-        /* 表單樣式 */
+        /* 頂部導航與語言切換 */
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .lang-switch button { padding: 6px 12px; border: 1px solid #ddd; background: white; border-radius: 20px; cursor: pointer; font-size: 14px; }
+        .lang-switch button.active { background: var(--visa-blue); color: white; border-color: var(--visa-blue); }
+
+        h2 { color: var(--visa-blue); margin: 0; font-size: 1.5em; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        
+        /* 輸入區 */
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
-        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
-        button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-primary { background: var(--visa-blue); color: white; width: 100%; margin-top: 5px; }
-        .btn-scan { background: #eef2ff; color: var(--visa-blue); border: 1px dashed var(--visa-blue); width: 100%; margin-bottom: 10px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
+        input:focus { border-color: var(--visa-blue); }
+        
+        button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-scan { background: #eef2ff; color: var(--visa-blue); border: 1px dashed var(--visa-blue); width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-add { background: var(--visa-blue); color: white; width: 100%; }
         .btn-calc { background: var(--success); color: white; width: 100%; font-size: 1.1em; margin-top: 10px; }
-        
+
         /* 清單樣式 */
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
         ul { list-style: none; padding: 0; margin: 0; }
-        li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-        .price-tag { font-weight: bold; color: var(--visa-blue); }
-        
+        li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .twd-hint { font-size: 0.8em; color: #888; margin-left: 5px; }
+
         /* 分組結果 */
-        .result-group { border-left: 6px solid var(--visa-blue); padding: 12px; margin-top: 15px; background: #fff; border-radius: 4px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        .result-group { border-left: 6px solid var(--visa-blue); padding: 12px; margin-top: 15px; background: #fff; border-radius: 8px; position: relative; }
         .status-ok { border-color: var(--success); background: #f0fff4; }
         .status-fail { border-color: var(--danger); background: #fff5f5; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-bottom: 5px; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; }
         .badge-ok { background: var(--success); color: white; }
         .badge-fail { background: var(--danger); color: white; }
         
-        #ocrStatus { font-size: 0.85em; color: #666; text-align: center; min-height: 1.2em; margin-bottom: 5px; }
-        .loading-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #666; border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite; margin-right: 5px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        #ocrStatus { font-size: 0.85em; color: #666; text-align: center; margin-bottom: 8px; height: 1.2em; }
+        .loading { color: var(--visa-blue); font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h2>💳 VISA 抽獎湊千工具</h2>
+    <div class="header-bar">
+        <h2 id="ui-title">💳 VISA 湊千小幫手</h2>
+        <div class="lang-switch">
+            <button id="btn-zh" class="active" onclick="setLang('zh')">繁中</button>
+            <button id="btn-ja" onclick="setLang('ja')">日本語</button>
+        </div>
+    </div>
 
     <div class="card">
-        <h3>快速錄入</h3>
         <div id="ocrStatus"></div>
         <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
-        <button class="btn-scan" onclick="document.getElementById('cameraInput').click()">📷 拍照辨識品項與價格</button>
+        <button class="btn-scan" onclick="document.getElementById('cameraInput').click()">
+            <span>📷</span> <span id="ui-scanBtn">拍照辨識品項與價格</span>
+        </button>
         
         <div class="input-group">
             <input type="text" id="itemName" placeholder="品項名稱">
             <input type="number" id="itemPrice" placeholder="金額" inputmode="decimal">
         </div>
-        <button class="btn-primary" onclick="addItem()">＋ 加入清單</button>
+        <button class="btn-add" id="ui-addBtn" onclick="addItem()">＋ 加入清單</button>
     </div>
 
     <div class="card">
-        <h3>目前清單 (總計: $<span id="totalDisplay">0</span>)</h3>
+        <div class="list-header">
+            <h3 id="ui-listTitle" style="margin:0">目前清單</h3>
+            <div style="text-align: right">
+                <span id="ui-totalLabel">總計</span>: ¥<span id="totalDisplay">0</span>
+                <div class="twd-hint">≈ NT$ <span id="totalTWD">0</span></div>
+            </div>
+        </div>
         <ul id="itemList"></ul>
-        <button class="btn-calc" onclick="calculateGroups()">⚙️ 開始自動分組 (1000/組)</button>
+        <button class="btn-calc" id="ui-calcBtn" onclick="calculateGroups()">⚙️ 開始自動分組 (1000/組)</button>
     </div>
 
     <div id="results"></div>
 
     <script>
+        // --- 多語系設定 ---
+        const i18n = {
+            zh: {
+                title: '💳 VISA 湊千小幫手',
+                scanBtn: '拍照辨識品項與價格',
+                placeholderName: '品項名稱',
+                placeholderPrice: '金額',
+                addBtn: '＋ 加入清單',
+                listTitle: '目前清單',
+                totalLabel: '總計',
+                calcBtn: '⚙️ 開始自動分組 (1000/組)',
+                groupName: '第 {n} 組',
+                qualified: '✅ 已達抽獎門檻',
+                unqualified: '❌ 未達標',
+                ocrLoading: '正在辨識文字中...',
+                ocrSuccess: '✅ 辨識成功！',
+                ocrFail: '❌ 辨識失敗',
+                twdLabel: '台幣約',
+                unnamed: '未命名項目'
+            },
+            ja: {
+                title: '💳 VISA 1000円まとめ',
+                scanBtn: '写真で価格を読み取る',
+                placeholderName: '商品名',
+                placeholderPrice: '金額',
+                addBtn: '＋ リストに追加',
+                listTitle: '現在のリスト',
+                totalLabel: '合計',
+                calcBtn: '⚙️ 自動グループ分け (1000円単位)',
+                groupName: 'グループ {n}',
+                qualified: '✅ 抽選対象',
+                unqualified: '❌ 未達成',
+                ocrLoading: '文字を認識中...',
+                ocrSuccess: '✅ 読み取り成功！',
+                ocrFail: '❌ 読み取り失敗',
+                twdLabel: '台湾ドル約',
+                unnamed: '商品'
+            }
+        };
+
+        let currentLang = 'zh';
         let items = [];
-        const targetAmount = 1000;
+        const TARGET_AMOUNT = 1000;
+        const JPY_TWD_RATE = 0.215; // 匯率示例
 
-        // --- 1. 拍照辨識邏輯 ---
-        const cameraInput = document.getElementById('cameraInput');
-        const ocrStatus = document.getElementById('ocrStatus');
+        function setLang(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.lang-switch button').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${lang}`).classList.add('active');
+            
+            // 更新 UI 文字
+            const dict = i18n[lang];
+            document.getElementById('ui-title').innerText = dict.title;
+            document.getElementById('ui-scanBtn').innerText = dict.scanBtn;
+            document.getElementById('itemName').placeholder = dict.placeholderName;
+            document.getElementById('itemPrice').placeholder = dict.placeholderPrice;
+            document.getElementById('ui-addBtn').innerText = dict.addBtn;
+            document.getElementById('ui-listTitle').innerText = dict.listTitle;
+            document.getElementById('ui-totalLabel').innerText = dict.totalLabel;
+            document.getElementById('ui-calcBtn').innerText = dict.calcBtn;
+            
+            updateUI();
+            if (document.getElementById('results').innerHTML !== "") calculateGroups();
+        }
 
-        cameraInput.addEventListener('change', async function(e) {
+        // --- 拍照辨識邏輯 ---
+        document.getElementById('cameraInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            ocrStatus.innerHTML = '<span class="loading-spinner"></span> 正在辨識文字中...';
+            const statusEl = document.getElementById('ocrStatus');
+            statusEl.innerHTML = `<span class="loading">${i18n[currentLang].ocrLoading}</span>`;
             
             try {
-                const { data: { text } } = await Tesseract.recognize(file, 'eng+chi_tra');
-                console.log("Raw OCR:", text);
+                // 這裡辨識 eng (數字) 和 chi_tra/jpn (名稱)
+                const { data: { text } } = await Tesseract.recognize(file, 'eng+chi_tra+jpn');
                 parseOcr(text);
             } catch (err) {
-                ocrStatus.innerText = "辨識失敗，請嘗試手動輸入";
+                statusEl.innerText = i18n[currentLang].ocrFail;
             }
         });
 
         function parseOcr(text) {
-            // 邏輯：尋找數字並過濾太小的雜訊
             const lines = text.split('\n');
-            let potentialPrice = 0;
-            let potentialName = "";
+            let foundPrice = 0;
+            let foundName = "";
 
             for (let line of lines) {
-                const match = line.match(/(\d{1,3}(,\d{3})*(\.\d+)?)/); // 匹配數字
+                const match = line.match(/(\d{1,3}(,\d{3})*(\.\d+)?)/); 
                 if (match) {
                     let price = parseFloat(match[0].replace(/,/g, ''));
-                    if (price > 10 && price < 100000) { // 過濾掉日期或極大值
-                        potentialPrice = price;
-                        potentialName = line.replace(match[0], '').replace(/[^\w\u4e00-\u9fa5]/g, '').trim();
+                    if (price > 10) { 
+                        foundPrice = price;
+                        foundName = line.replace(match[0], '').replace(/[^\w\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]/g, '').trim();
                         break;
                     }
                 }
             }
 
-            if (potentialPrice > 0) {
-                document.getElementById('itemName').value = potentialName || "掃描項目";
-                document.getElementById('itemPrice').value = potentialPrice;
-                ocrStatus.innerText = "✅ 辨識成功！";
+            if (foundPrice > 0) {
+                document.getElementById('itemName').value = foundName || i18n[currentLang].unnamed;
+                document.getElementById('itemPrice').value = foundPrice;
+                document.getElementById('ocrStatus').innerText = i18n[currentLang].ocrSuccess;
             } else {
-                ocrStatus.innerText = "❌ 沒找到明顯金額，請手動輸入";
+                document.getElementById('ocrStatus').innerText = i18n[currentLang].ocrFail;
             }
         }
 
-        // --- 2. 清單管理 ---
+        // --- 核心邏輯 ---
         function addItem() {
-            const nameEl = document.getElementById('itemName');
-            const priceEl = document.getElementById('itemPrice');
-            const price = parseFloat(priceEl.value);
+            const name = document.getElementById('itemName').value || i18n[currentLang].unnamed;
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            if (!price) return;
 
-            if (!price) return alert("請輸入金額");
-
-            items.push({ name: nameEl.value || "未命名", price: price });
-            nameEl.value = "";
-            priceEl.value = "";
+            items.push({ id: Date.now(), name, price });
+            document.getElementById('itemName').value = "";
+            document.getElementById('itemPrice').value = "";
             updateUI();
         }
 
         function updateUI() {
-            const list = document.getElementById('itemList');
-            const totalDisplay = document.getElementById('totalDisplay');
-            let total = 0;
-
-            list.innerHTML = items.map((item, index) => {
-                total += item.price;
-                return `<li><span>${item.name}</span><span class="price-tag">$${item.price}</span></li>`;
-            }).join('');
+            const listEl = document.getElementById('itemList');
+            const totalEl = document.getElementById('totalDisplay');
+            const twdEl = document.getElementById('totalTWD');
             
-            totalDisplay.innerText = total.toFixed(1);
+            let total = items.reduce((sum, item) => sum + item.price, 0);
+            totalEl.innerText = total.toLocaleString();
+            twdEl.innerText = Math.round(total * JPY_TWD_RATE).toLocaleString();
+
+            listEl.innerHTML = items.map(item => `
+                <li>
+                    <span>${item.name}</span>
+                    <span>¥${item.price.toLocaleString()}</span>
+                </li>
+            `).join('');
         }
 
-        // --- 3. 自動分組演算法 (Greedy Approach) ---
         function calculateGroups() {
             if (items.length === 0) return;
-
-            // 複製並降序排序（大數優先填滿）
+            
+            // 貪婪演算法：由大到小排序
             let pool = [...items].sort((a, b) => b.price - a.price);
             let groups = [];
 
@@ -152,14 +232,12 @@
                 let currentGroup = [];
                 let currentSum = 0;
 
-                // 嘗試湊滿 1000
                 for (let i = 0; i < pool.length; i++) {
                     currentGroup.push(pool[i]);
                     currentSum += pool[i].price;
                     pool.splice(i, 1);
                     i--;
-
-                    if (currentSum >= targetAmount) break;
+                    if (currentSum >= TARGET_AMOUNT) break;
                 }
                 groups.push({ items: currentGroup, sum: currentSum });
             }
@@ -169,17 +247,21 @@
 
         function renderResults(groups) {
             const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '<h3>分組建議</h3>';
+            resultsDiv.innerHTML = `<h3 style="margin-left: 5px">${i18n[currentLang].listTitle} (Optimizer)</h3>`;
 
             groups.forEach((group, index) => {
-                const ok = group.sum >= targetAmount;
+                const ok = group.sum >= TARGET_AMOUNT;
+                const dict = i18n[currentLang];
                 const div = document.createElement('div');
                 div.className = `result-group ${ok ? 'status-ok' : 'status-fail'}`;
                 
                 div.innerHTML = `
-                    <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? '可抽獎一次' : '未達標'}</span><br>
-                    <strong>第 ${index + 1} 組 - 小計: $${group.sum.toFixed(1)}</strong><br>
-                    <small>${group.items.map(i => i.name).join(', ')}</small>
+                    <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">
+                        ${ok ? dict.qualified : dict.unqualified}
+                    </span><br>
+                    <strong>${dict.groupName.replace('{n}', index + 1)} - ¥${group.sum.toLocaleString()}</strong>
+                    <div class="twd-hint">≈ NT$ ${Math.round(group.sum * JPY_TWD_RATE).toLocaleString()}</div>
+                    <small style="color: #666">${group.items.map(i => i.name).join(', ')}</small>
                 `;
                 resultsDiv.appendChild(div);
             });
