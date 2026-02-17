@@ -3,254 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VISA Optimizer Pro</title>
+    <title>VISA 湊千小幫手 v3</title>
     <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
     <style>
         :root { --visa-blue: #0033a0; --success: #28a745; --danger: #dc3545; --warning: #ffc107; }
         body { font-family: -apple-system, system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; color: #333; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .lang-switch button { padding: 5px 10px; border: 1px solid #ddd; background: white; border-radius: 15px; font-size: 12px; }
-        .lang-switch button.active { background: var(--visa-blue); color: white; }
-        
         h2 { color: var(--visa-blue); margin: 0; font-size: 1.3em; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 12px; }
-        
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
         input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
-        
         button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-scan { background: #eef2ff; color: var(--visa-blue); border: 1px dashed var(--visa-blue); width: 100%; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .btn-add { background: var(--visa-blue); color: white; width: 100%; }
         .btn-calc { background: var(--success); color: white; width: 100%; font-size: 1.1em; margin-top: 10px; }
-
-        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        ul { list-style: none; padding: 0; margin: 0; }
-        li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f9f9f9; font-size: 14px; }
-        .item-info { flex: 1; display: flex; justify-content: space-between; margin-right: 15px; cursor: pointer; }
-        .btn-delete { color: #aaa; background: none; padding: 5px; font-size: 18px; }
-        .btn-delete:hover { color: var(--danger); }
-
-        .result-group { border-left: 6px solid var(--visa-blue); padding: 12px; margin-top: 12px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .status-ok { border-color: var(--success); }
-        .status-fail { border-color: var(--warning); background: #fff9e6; }
         
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 0.7em; font-weight: bold; margin-bottom: 5px; }
+        /* 清單列表 */
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+        .btn-del { color: #999; background: none; font-size: 1.2em; padding: 0 5px; transition: 0.2s; }
+        .btn-del:hover { color: var(--danger); }
+
+        /* 分組結果 */
+        .result-group { border-left: 6px solid var(--visa-blue); padding: 15px; margin-top: 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .status-ok { border-color: var(--success); }
+        .status-fail { border-color: var(--warning); background: #fffdf5; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 15px; font-size: 0.75em; font-weight: bold; margin-bottom: 8px; }
         .badge-ok { background: var(--success); color: white; }
         .badge-fail { background: var(--warning); color: #856404; }
-        
-        .suggestion { font-size: 0.85em; color: var(--danger); font-weight: bold; margin-top: 5px; display: block; }
-        .twd-hint { font-size: 0.8em; color: #888; }
-        #ocrStatus { font-size: 0.8em; text-align: center; margin-bottom: 5px; min-height: 1.2em; }
+        .suggestion { font-size: 0.9em; color: var(--danger); font-weight: bold; display: block; margin-top: 8px; }
     </style>
 </head>
 <body>
 
     <div class="header-bar">
-        <h2 id="ui-title">💳 VISA 湊千精算師</h2>
-        <div class="lang-switch">
-            <button id="btn-zh" class="active" onclick="setLang('zh')">繁中</button>
-            <button id="btn-ja" onclick="setLang('ja')">日本語</button>
-        </div>
+        <h2>💳 VISA 湊千精算師</h2>
+        <button onclick="clearAll()" style="font-size: 0.8em; color: #666; background: none;">清除全部</button>
     </div>
 
     <div class="card">
-        <div id="ocrStatus"></div>
-        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
-        <button class="btn-scan" onclick="document.getElementById('cameraInput').click()">
-            <span>📷</span> <span id="ui-scanBtn">拍照辨識價格</span>
-        </button>
-        
         <div class="input-group">
-            <input type="text" id="itemName" placeholder="品項名稱">
+            <input type="text" id="itemName" placeholder="品項名稱 (如: 藥妝)">
             <input type="number" id="itemPrice" placeholder="金額" inputmode="decimal">
         </div>
-        <button class="btn-add" id="ui-addBtn" onclick="addItem()">＋ 加入清單</button>
+        <button class="btn-add" onclick="addItem()">＋ 加入清單</button>
     </div>
 
     <div class="card">
-        <div class="list-header">
-            <h3 id="ui-listTitle" style="margin:0; font-size: 1em;">目前清單</h3>
-            <div style="text-align: right">
-                <span id="ui-totalLabel">總額</span>: ¥<span id="totalDisplay">0</span>
-                <div class="twd-hint">≈ NT$ <span id="totalTWD">0</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
+            <h3 style="margin:0; font-size: 1em;">目前清單</h3>
+            <div style="text-align: right; font-size: 0.9em; color: #666;">
+                總計: ¥<span id="totalDisplay">0</span><br>
+                ≈ NT$ <span id="totalTWD">0</span>
             </div>
         </div>
         <ul id="itemList"></ul>
-        <button class="btn-calc" id="ui-calcBtn" onclick="calculateGroups()">⚙️ 執行精準分組</button>
+        <button class="btn-calc" onclick="calculateGroups()">⚙️ 執行精準分組</button>
     </div>
 
     <div id="results"></div>
 
     <script>
-        const i18n = {
-            zh: {
-                title: '💳 VISA 湊千精算師',
-                scanBtn: '拍照辨識價格',
-                placeholderName: '品項名稱',
-                placeholderPrice: '金額',
-                addBtn: '＋ 加入清單',
-                listTitle: '待處理清單',
-                totalLabel: '總額',
-                calcBtn: '⚙️ 執行精準分組',
-                groupName: '組合 {n}',
-                qualified: '✅ 達標 (可抽獎)',
-                unqualified: '⚠️ 未達標',
-                suggest: '💡 再湊 ¥{m} 即可多抽一次！',
-                ocrLoading: '辨識中...',
-                unnamed: '商品'
-            },
-            ja: {
-                title: '💳 VISA 1000円精算機',
-                scanBtn: '価格をスキャン',
-                placeholderName: '商品名',
-                placeholderPrice: '金額',
-                addBtn: '＋ 追加',
-                listTitle: '買い物リスト',
-                totalLabel: '合計',
-                calcBtn: '⚙️ 精密グループ分け',
-                groupName: 'グループ {n}',
-                qualified: '✅ 達成 (抽選対象)',
-                unqualified: '⚠️ 未達成',
-                suggest: '💡 あと ¥{m} で抽選権確定！',
-                ocrLoading: '読み取り中...',
-                unnamed: 'アイテム'
-            }
-        };
-
-        let currentLang = 'zh';
         let items = [];
         const TARGET = 1000;
-        const RATE = 0.215;
-
-        function setLang(lang) {
-            currentLang = lang;
-            document.querySelectorAll('.lang-switch button').forEach(b => b.classList.remove('active'));
-            document.getElementById(`btn-${lang}`).classList.add('active');
-            const d = i18n[lang];
-            document.getElementById('ui-title').innerText = d.title;
-            document.getElementById('ui-scanBtn').innerText = d.scanBtn;
-            document.getElementById('itemName').placeholder = d.placeholderName;
-            document.getElementById('itemPrice').placeholder = d.placeholderPrice;
-            document.getElementById('ui-addBtn').innerText = d.addBtn;
-            document.getElementById('ui-listTitle').innerText = d.listTitle;
-            document.getElementById('ui-totalLabel').innerText = d.totalLabel;
-            document.getElementById('ui-calcBtn').innerText = d.calcBtn;
-            updateUI();
-        }
+        const JPY_TWD_RATE = 0.215;
 
         function addItem() {
             const nameEl = document.getElementById('itemName');
             const priceEl = document.getElementById('itemPrice');
             const price = parseFloat(priceEl.value);
             if (!price) return;
-            items.push({ id: Date.now() + Math.random(), name: nameEl.value || i18n[currentLang].unnamed, price });
-            nameEl.value = "";
-            priceEl.value = "";
-            updateUI();
+
+            items.push({ id: Date.now(), name: nameEl.value || '項目', price });
+            nameEl.value = '';
+            priceEl.value = '';
+            renderList();
         }
 
         function deleteItem(id) {
             items = items.filter(i => i.id !== id);
-            updateUI();
+            renderList();
         }
 
-        function editItem(id) {
-            const i = items.find(x => x.id === id);
-            if (i) {
-                document.getElementById('itemName').value = i.name;
-                document.getElementById('itemPrice').value = i.price;
-                deleteItem(id);
+        function clearAll() {
+            if(confirm("確定要清除所有品項嗎？")) {
+                items = [];
+                renderList();
+                document.getElementById('results').innerHTML = '';
             }
         }
 
-        function updateUI() {
+        function renderList() {
             const listEl = document.getElementById('itemList');
-            let total = items.reduce((s, i) => s + i.price, 0);
+            let total = 0;
+            listEl.innerHTML = items.map(item => {
+                total += item.price;
+                return `<li>
+                    <div style="flex:1"><strong>${item.name}</strong></div>
+                    <div style="margin-right:15px">¥${item.price.toLocaleString()}</div>
+                    <button class="btn-del" onclick="deleteItem(${item.id})">🗑️</button>
+                </li>`;
+            }).join('');
             document.getElementById('totalDisplay').innerText = total.toLocaleString();
-            document.getElementById('totalTWD').innerText = Math.round(total * RATE).toLocaleString();
-            listEl.innerHTML = items.map(i => `
-                <li>
-                    <div class="item-info" onclick="editItem(${i.id})">
-                        <span>${i.name}</span>
-                        <span>¥${i.price.toLocaleString()}</span>
-                    </div>
-                    <button class="btn-delete" onclick="deleteItem(${i.id})">🗑️</button>
-                </li>
-            `).join('');
-            document.getElementById('results').innerHTML = "";
+            document.getElementById('totalTWD').innerText = Math.round(total * JPY_TWD_RATE).toLocaleString();
         }
 
-        // --- 修正後的精準分組演算法 ---
+        // --- 核心演算法：修正分組邏輯 ---
         function calculateGroups() {
             if (items.length === 0) return;
-            let pool = [...items].sort((a, b) => b.price - a.price); // 由大到小排序
+            
+            // 先依價格從大到小排序，利於裝箱
+            let pool = [...items].sort((a, b) => b.price - a.price);
             let groups = [];
 
             while (pool.length > 0) {
                 let currentGroup = [];
                 let currentSum = 0;
 
-                // 優先放入當前最大的品項
-                currentSum += pool[0].price;
+                // 每個組合至少拿一個當前最大的
                 currentGroup.push(pool[0]);
+                currentSum += pool[0].price;
                 pool.splice(0, 1);
 
-                // 尋找剩餘池子中，最合適塞入的品項（湊滿 1000）
+                // 嘗試從剩下的池子裡找出能填進這組、且最接近 1000 的組合
+                // 這裡採用 Greedy 邏輯：只要加了不會大幅超過 1000 太多，或者還沒滿 1000，就繼續加
                 for (let i = 0; i < pool.length; i++) {
                     if (currentSum < TARGET) {
                         currentSum += pool[i].price;
                         currentGroup.push(pool[i]);
                         pool.splice(i, 1);
-                        i--; // 補償索引位移
+                        i--; // 因為移除了元素，索引要回退
                     }
                 }
                 groups.push({ items: currentGroup, sum: currentSum });
             }
-            renderResults(groups);
+            renderResultUI(groups);
         }
 
-        function renderResults(groups) {
+        function renderResultUI(groups) {
             const resDiv = document.getElementById('results');
-            resDiv.innerHTML = `<h3 style="margin-left:5px">📊 分組建議結果</h3>`;
+            resDiv.innerHTML = '<h3 style="margin-left:5px">分組建議結果</h3>';
+
             groups.forEach((g, idx) => {
                 const ok = g.sum >= TARGET;
-                const dict = i18n[currentLang];
                 const div = document.createElement('div');
                 div.className = `result-group ${ok ? 'status-ok' : 'status-fail'}`;
-                let suggestMsg = !ok ? `<span class="suggestion">${dict.suggest.replace('{m}', TARGET - g.sum)}</span>` : "";
-
-                div.innerHTML = `
-                    <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? dict.qualified : dict.unqualified}</span>
-                    <strong style="display:block; font-size: 1.1em;">${dict.groupName.replace('{n}', idx+1)}: ¥${g.sum.toLocaleString()}</strong>
-                    <div class="twd-hint">≈ NT$ ${Math.round(g.sum * RATE).toLocaleString()}</div>
-                    <small style="display:block; color: #666; margin-top:5px; border-top: 1px dashed #ddd; padding-top:5px;">
-                        ${g.items.map(i => i.name).join(' + ')}
-                    </small>
-                    ${suggestMsg}
+                
+                let html = `
+                    <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? '✅ 達標 (可抽獎)' : '⚠️ 未達標'}</span>
+                    <strong style="display:block; font-size: 1.1em;">組合 ${idx + 1}: ¥${g.sum.toLocaleString()}</strong>
+                    <div style="font-size: 0.8em; color: #888;">≈ NT$ ${Math.round(g.sum * JPY_TWD_RATE)}</div>
+                    <div style="margin-top:8px; font-size: 0.85em; color: #666; border-top: 1px dashed #eee; padding-top:8px;">
+                        ${g.items.map(i => i.name + ' (¥' + i.price + ')').join(' + ')}
+                    </div>
                 `;
+
+                if (!ok) {
+                    html += `<span class="suggestion">💡 再湊 ¥${TARGET - g.sum} 即可多抽一次！</span>`;
+                }
+                div.innerHTML = html;
                 resDiv.appendChild(div);
             });
+            // 自動滾動到底部看結果
+            resDiv.scrollIntoView({ behavior: 'smooth' });
         }
-
-        // OCR 略，保持原樣...
-        document.getElementById('cameraInput').addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            document.getElementById('ocrStatus').innerText = i18n[currentLang].ocrLoading;
-            try {
-                const { data: { text } } = await Tesseract.recognize(file, 'eng+chi_tra+jpn');
-                const lines = text.split('\n');
-                for (let l of lines) {
-                    const m = l.match(/\d+/);
-                    if (m && parseInt(m[0]) > 10) {
-                        document.getElementById('itemPrice').value = m[0];
-                        document.getElementById('itemName').value = l.replace(m[0], '').replace(/[^\w\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]/g, '').trim().substring(0,10);
-                        break;
-                    }
-                }
-                document.getElementById('ocrStatus').innerText = "";
-            } catch (err) { document.getElementById('ocrStatus').innerText = "辨識錯誤"; }
-        });
     </script>
 </body>
 </html>
