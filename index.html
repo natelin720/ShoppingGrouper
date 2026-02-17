@@ -25,9 +25,10 @@
 
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
         ul { list-style: none; padding: 0; margin: 0; }
-        li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f9f9f9; font-size: 14px; }
+        li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f9f9f9; font-size: 14px; }
+        .item-info { flex: 1; display: flex; justify-content: space-between; margin-right: 15px; cursor: pointer; }
+        .btn-delete { color: var(--danger); background: none; padding: 5px; font-size: 16px; }
 
-        /* 分組樣式 */
         .result-group { border-left: 6px solid var(--visa-blue); padding: 12px; margin-top: 12px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .status-ok { border-color: var(--success); }
         .status-fail { border-color: var(--warning); background: #fff9e6; }
@@ -69,7 +70,7 @@
         <div class="list-header">
             <h3 id="ui-listTitle" style="margin:0; font-size: 1em;">目前清單</h3>
             <div style="text-align: right">
-                <span id="ui-totalLabel">總計</span>: ¥<span id="totalDisplay">0</span>
+                <span id="ui-totalLabel">總額</span>: ¥<span id="totalDisplay">0</span>
                 <div class="twd-hint">≈ NT$ <span id="totalTWD">0</span></div>
             </div>
         </div>
@@ -116,7 +117,7 @@
         };
 
         let currentLang = 'zh';
-        let items = [];
+        let items = []; // 儲存格式: { id, name, price }
         const TARGET = 1000;
         const RATE = 0.215;
 
@@ -136,14 +137,33 @@
             updateUI();
         }
 
+        // --- 清單管理 ---
         function addItem() {
-            const name = document.getElementById('itemName').value || i18n[currentLang].unnamed;
-            const price = parseFloat(document.getElementById('itemPrice').value);
+            const nameInput = document.getElementById('itemName');
+            const priceInput = document.getElementById('itemPrice');
+            const name = nameInput.value || i18n[currentLang].unnamed;
+            const price = parseFloat(priceInput.value);
+            
             if (!price) return;
+
             items.push({ id: Date.now() + Math.random(), name, price });
-            document.getElementById('itemName').value = "";
-            document.getElementById('itemPrice').value = "";
+            nameInput.value = "";
+            priceInput.value = "";
             updateUI();
+        }
+
+        function deleteItem(id) {
+            items = items.filter(item => item.id !== id);
+            updateUI();
+        }
+
+        function editItem(id) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                document.getElementById('itemName').value = item.name;
+                document.getElementById('itemPrice').value = item.price;
+                deleteItem(id); // 先移除，修改後再按「加入清單」
+            }
         }
 
         function updateUI() {
@@ -151,29 +171,45 @@
             let total = items.reduce((s, i) => s + i.price, 0);
             document.getElementById('totalDisplay').innerText = total.toLocaleString();
             document.getElementById('totalTWD').innerText = Math.round(total * RATE).toLocaleString();
-            listEl.innerHTML = items.map(i => `<li><span>${i.name}</span><span>¥${i.price}</span></li>`).join('');
+            
+            listEl.innerHTML = items.map(i => `
+                <li>
+                    <div class="item-info" onclick="editItem(${i.id})">
+                        <span>${i.name}</span>
+                        <span>¥${i.price.toLocaleString()}</span>
+                    </div>
+                    <button class="btn-delete" onclick="deleteItem(${i.id})">🗑️</button>
+                </li>
+            `).join('');
+            
+            // 每次更新清單時，清空舊的計算結果
+            document.getElementById('results').innerHTML = "";
         }
 
-        // --- 精準分組演算法 ---
+        // --- 精準分組演算法 (核心修正) ---
         function calculateGroups() {
             if (items.length === 0) return;
+            
             let pool = [...items];
             let groups = [];
 
             while (pool.length > 0) {
                 let bestCombination = getBestCombination(pool, TARGET);
+                if (bestCombination.items.length === 0) break;
+                
                 groups.push(bestCombination);
+                
                 const usedIds = bestCombination.items.map(i => i.id);
                 pool = pool.filter(i => !usedIds.includes(i.id));
-                if (bestCombination.items.length === 0) break;
             }
             renderResults(groups);
         }
 
         function getBestCombination(remaining, target) {
             // 如果剩下總額不足 1000，直接全部歸一組
-            if (remaining.reduce((s, i) => s + i.price, 0) < target) {
-                return { items: remaining, sum: remaining.reduce((s, i) => s + i.price, 0) };
+            const currentTotal = remaining.reduce((s, i) => s + i.price, 0);
+            if (currentTotal < target) {
+                return { items: [...remaining], sum: currentTotal };
             }
 
             let bestItems = [];
@@ -194,17 +230,25 @@
                 currentItems.push(remaining[index]);
                 dfs(index + 1, currentItems, currentSum + remaining[index]);
                 currentItems.pop();
+                
                 // 不選
                 dfs(index + 1, currentItems, currentSum);
             }
 
             dfs(0, [], 0);
+            
+            // 安全機制：如果 DFS 沒找到（理論上不會），就隨便拿一個
+            if (bestItems.length === 0 && remaining.length > 0) {
+                bestItems = [remaining[0]];
+            }
+
             return { items: bestItems, sum: bestItems.reduce((s, i) => s + i.price, 0) };
         }
 
         function renderResults(groups) {
             const resDiv = document.getElementById('results');
-            resDiv.innerHTML = `<h3 style="margin-left:5px">${i18n[currentLang].calcBtn}</h3>`;
+            resDiv.innerHTML = `<h3 style="margin-left:5px; font-size: 1.1em;">📊 分組建議結果</h3>`;
+            
             groups.forEach((g, idx) => {
                 const ok = g.sum >= TARGET;
                 const dict = i18n[currentLang];
@@ -218,31 +262,37 @@
 
                 div.innerHTML = `
                     <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? dict.qualified : dict.unqualified}</span>
-                    <strong>${dict.groupName.replace('{n}', idx+1)}: ¥${g.sum.toLocaleString()}</strong>
-                    <div class="twd-hint">≈ NT$ ${Math.round(g.sum * RATE)}</div>
-                    <small style="display:block; color: #666; margin-top:5px;">${g.items.map(i => i.name).join(' + ')}</small>
+                    <strong style="display:block; font-size: 1.1em;">${dict.groupName.replace('{n}', idx+1)}: ¥${g.sum.toLocaleString()}</strong>
+                    <div class="twd-hint">≈ NT$ ${Math.round(g.sum * RATE).toLocaleString()}</div>
+                    <small style="display:block; color: #666; margin-top:5px; border-top: 1px dashed #ddd; padding-top:5px;">
+                        ${g.items.map(i => i.name).join(' + ')}
+                    </small>
                     ${suggestMsg}
                 `;
                 resDiv.appendChild(div);
             });
         }
 
-        // OCR 略
+        // --- OCR 拍照辨識 ---
         document.getElementById('cameraInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
             document.getElementById('ocrStatus').innerText = i18n[currentLang].ocrLoading;
-            const { data: { text } } = await Tesseract.recognize(file, 'eng+chi_tra+jpn');
-            const lines = text.split('\n');
-            for (let l of lines) {
-                const m = l.match(/\d+/);
-                if (m && parseInt(m[0]) > 10) {
-                    document.getElementById('itemPrice').value = m[0];
-                    document.getElementById('itemName').value = l.replace(m[0], '').trim().substring(0,10);
-                    break;
+            try {
+                const { data: { text } } = await Tesseract.recognize(file, 'eng+chi_tra+jpn');
+                const lines = text.split('\n');
+                for (let l of lines) {
+                    const m = l.match(/\d+/);
+                    if (m && parseInt(m[0]) > 10) {
+                        document.getElementById('itemPrice').value = m[0];
+                        document.getElementById('itemName').value = l.replace(m[0], '').replace(/[^\w\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]/g, '').trim().substring(0,10);
+                        break;
+                    }
                 }
+                document.getElementById('ocrStatus').innerText = "✅ 辨識完成";
+            } catch (err) {
+                document.getElementById('ocrStatus').innerText = "❌ 辨識失敗";
             }
-            document.getElementById('ocrStatus').innerText = "";
         });
     </script>
 </body>
