@@ -1,0 +1,24 @@
+<script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
+
+    <h2>💳 VISA 抽獎湊千工具</h2>
+
+    <div class="card">
+        <h3>快速錄入</h3>
+        <div id="ocrStatus"></div>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+        <button class="btn-scan" onclick="document.getElementById('cameraInput').click()">📷 拍照辨識品項與價格</button>
+        
+        <div class="input-group">
+            <input type="text" id="itemName" placeholder="品項名稱">
+            <input type="number" id="itemPrice" placeholder="金額" inputmode="decimal">
+        </div>
+        <button class="btn-primary" onclick="addItem()">＋ 加入清單</button>
+    </div>
+
+    <div class="card">
+        <h3>目前清單 (總計: $<span id="totalDisplay">0</span>)</h3>
+        <ul id="itemList"></ul>
+        <button class="btn-calc" onclick="calculateGroups()">⚙️ 開始自動分組 (1000/組)</button>
+    </div>
+
+    <div id="results"></div>
