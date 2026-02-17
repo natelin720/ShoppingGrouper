@@ -1,4 +1,44 @@
-<script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VISA 湊千小幫手</title>
+    <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
+    <style>
+        :root { --visa-blue: #0033a0; --visa-gold: #f7b600; --success: #28a745; --danger: #dc3545; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; color: #333; }
+        h2 { color: var(--visa-blue); text-align: center; margin-bottom: 20px; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
+        h3 { margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        
+        /* 表單樣式 */
+        .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+        button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background: var(--visa-blue); color: white; width: 100%; margin-top: 5px; }
+        .btn-scan { background: #eef2ff; color: var(--visa-blue); border: 1px dashed var(--visa-blue); width: 100%; margin-bottom: 10px; }
+        .btn-calc { background: var(--success); color: white; width: 100%; font-size: 1.1em; margin-top: 10px; }
+        
+        /* 清單樣式 */
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .price-tag { font-weight: bold; color: var(--visa-blue); }
+        
+        /* 分組結果 */
+        .result-group { border-left: 6px solid var(--visa-blue); padding: 12px; margin-top: 15px; background: #fff; border-radius: 4px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        .status-ok { border-color: var(--success); background: #f0fff4; }
+        .status-fail { border-color: var(--danger); background: #fff5f5; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-bottom: 5px; }
+        .badge-ok { background: var(--success); color: white; }
+        .badge-fail { background: var(--danger); color: white; }
+        
+        #ocrStatus { font-size: 0.85em; color: #666; text-align: center; min-height: 1.2em; margin-bottom: 5px; }
+        .loading-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #666; border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite; margin-right: 5px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
 
     <h2>💳 VISA 抽獎湊千工具</h2>
 
@@ -22,3 +62,128 @@
     </div>
 
     <div id="results"></div>
+
+    <script>
+        let items = [];
+        const targetAmount = 1000;
+
+        // --- 1. 拍照辨識邏輯 ---
+        const cameraInput = document.getElementById('cameraInput');
+        const ocrStatus = document.getElementById('ocrStatus');
+
+        cameraInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            ocrStatus.innerHTML = '<span class="loading-spinner"></span> 正在辨識文字中...';
+            
+            try {
+                const { data: { text } } = await Tesseract.recognize(file, 'eng+chi_tra');
+                console.log("Raw OCR:", text);
+                parseOcr(text);
+            } catch (err) {
+                ocrStatus.innerText = "辨識失敗，請嘗試手動輸入";
+            }
+        });
+
+        function parseOcr(text) {
+            // 邏輯：尋找數字並過濾太小的雜訊
+            const lines = text.split('\n');
+            let potentialPrice = 0;
+            let potentialName = "";
+
+            for (let line of lines) {
+                const match = line.match(/(\d{1,3}(,\d{3})*(\.\d+)?)/); // 匹配數字
+                if (match) {
+                    let price = parseFloat(match[0].replace(/,/g, ''));
+                    if (price > 10 && price < 100000) { // 過濾掉日期或極大值
+                        potentialPrice = price;
+                        potentialName = line.replace(match[0], '').replace(/[^\w\u4e00-\u9fa5]/g, '').trim();
+                        break;
+                    }
+                }
+            }
+
+            if (potentialPrice > 0) {
+                document.getElementById('itemName').value = potentialName || "掃描項目";
+                document.getElementById('itemPrice').value = potentialPrice;
+                ocrStatus.innerText = "✅ 辨識成功！";
+            } else {
+                ocrStatus.innerText = "❌ 沒找到明顯金額，請手動輸入";
+            }
+        }
+
+        // --- 2. 清單管理 ---
+        function addItem() {
+            const nameEl = document.getElementById('itemName');
+            const priceEl = document.getElementById('itemPrice');
+            const price = parseFloat(priceEl.value);
+
+            if (!price) return alert("請輸入金額");
+
+            items.push({ name: nameEl.value || "未命名", price: price });
+            nameEl.value = "";
+            priceEl.value = "";
+            updateUI();
+        }
+
+        function updateUI() {
+            const list = document.getElementById('itemList');
+            const totalDisplay = document.getElementById('totalDisplay');
+            let total = 0;
+
+            list.innerHTML = items.map((item, index) => {
+                total += item.price;
+                return `<li><span>${item.name}</span><span class="price-tag">$${item.price}</span></li>`;
+            }).join('');
+            
+            totalDisplay.innerText = total.toFixed(1);
+        }
+
+        // --- 3. 自動分組演算法 (Greedy Approach) ---
+        function calculateGroups() {
+            if (items.length === 0) return;
+
+            // 複製並降序排序（大數優先填滿）
+            let pool = [...items].sort((a, b) => b.price - a.price);
+            let groups = [];
+
+            while (pool.length > 0) {
+                let currentGroup = [];
+                let currentSum = 0;
+
+                // 嘗試湊滿 1000
+                for (let i = 0; i < pool.length; i++) {
+                    currentGroup.push(pool[i]);
+                    currentSum += pool[i].price;
+                    pool.splice(i, 1);
+                    i--;
+
+                    if (currentSum >= targetAmount) break;
+                }
+                groups.push({ items: currentGroup, sum: currentSum });
+            }
+
+            renderResults(groups);
+        }
+
+        function renderResults(groups) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h3>分組建議</h3>';
+
+            groups.forEach((group, index) => {
+                const ok = group.sum >= targetAmount;
+                const div = document.createElement('div');
+                div.className = `result-group ${ok ? 'status-ok' : 'status-fail'}`;
+                
+                div.innerHTML = `
+                    <span class="badge ${ok ? 'badge-ok' : 'badge-fail'}">${ok ? '可抽獎一次' : '未達標'}</span><br>
+                    <strong>第 ${index + 1} 組 - 小計: $${group.sum.toFixed(1)}</strong><br>
+                    <small>${group.items.map(i => i.name).join(', ')}</small>
+                `;
+                resultsDiv.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
